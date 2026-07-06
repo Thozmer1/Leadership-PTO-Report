@@ -167,7 +167,7 @@ const EMBEDDED = {"reportDate":"2026-06-12","generated":"2026-07-06","people":[{
 /* ---------- State ---------- */
 let DATA = EMBEDDED;
 let deptFilter = 'All';
-let metric = 'pto';           // 'pto' | 'bonus'
+let metric = 'pto';
 let sortState = {k:'total', dir:-1};
 let chart;
 
@@ -182,105 +182,97 @@ const INTERNAL = {
 const POLICY = {'PTO':'pto','Sick Leave (Internal)':'sick','Earned Bonus Days':'bonus'};
 
 function titleCaseName(n){
-  if(n && n.indexOf(',')>-1){const[a,b]=n.split(',');return (b.trim()+' '+a.trim()).replace(/\w\S*/g,s=>s[0].toUpperCase()+s.slice(1).toLowerCase());}
+  if(n && n.indexOf(',')>-1){const a=n.split(',')[0],b=n.split(',')[1];return (b.trim()+' '+a.trim()).replace(/\w\S*/g,function(s){return s[0].toUpperCase()+s.slice(1).toLowerCase();});}
   return n||'';
 }
-function headerMap(rows){const h=rows[0]||[];const m={};h.forEach((c,i)=>{if(c)m[String(c).trim()]=i;});return m;}
-function toDate(v){ if(v instanceof Date) return v; if(typeof v==='number'){return new Date(Date.UTC(1899,11,30)+v*864e5);} if(typeof v==='string'){const p=v.split('/');if(p.length===3)return new Date(+p[2],+p[0]-1,+p[1]);const d=new Date(v);return isNaN(d)?null:d;} return null;}
+function headerMap(rows){var h=rows[0]||[];var m={};h.forEach(function(c,i){if(c)m[String(c).trim()]=i;});return m;}
+function toDate(v){ if(v instanceof Date) return v; if(typeof v==='number'){return new Date(Date.UTC(1899,11,30)+v*864e5);} if(typeof v==='string'){var p=v.split('/');if(p.length===3)return new Date(+p[2],+p[0]-1,+p[1]);var d=new Date(v);return isNaN(d)?null:d;} return null;}
 
 function buildFromWorkbook(wb){
-  const ref = new Date();  // split past/future by today when no Timing column
-  const shReq = wb.SheetNames.find(s=>/time off request/i.test(s));
+  var ref = new Date();
+  var shReq = wb.SheetNames.find(function(s){return /time off request/i.test(s);});
   if(!shReq) throw new Error('No “Time Off Request” tab found.');
-  const req = XLSX.utils.sheet_to_json(wb.Sheets[shReq],{header:1,raw:true});
-  const rm = headerMap(req);
-  const cName=rm['NAME'], cDept=rm['HOME DEPARTMENT'], cPol=rm['POLICY NAME'],
-        cStat=rm['REQUEST STATUS'], cDur=rm['DURATION'], cTim=rm['Timing'],
-        cReqD=rm['TIME OFF REQUEST DATE'];
+  var req = XLSX.utils.sheet_to_json(wb.Sheets[shReq],{header:1,raw:true});
+  var rm = headerMap(req);
+  var cName=rm['NAME'], cDept=rm['HOME DEPARTMENT'], cPol=rm['POLICY NAME'],
+      cStat=rm['REQUEST STATUS'], cDur=rm['DURATION'], cTim=rm['Timing'],
+      cReqD=rm['TIME OFF REQUEST DATE'];
   if(cName==null||cDept==null||cDur==null) throw new Error('Request tab missing expected columns.');
-  const rec={};
-  const get=(name,dept)=>{ if(!rec[name])rec[name]={name:titleCaseName(name),raw:name,dept:INTERNAL[dept],ptoTaken:0,ptoFuture:0,ptoBal:0,bonusTaken:0,bonusFuture:0,bonusBal:0,sickTaken:0,sickFuture:0}; return rec[name];};
-  for(let i=1;i<req.length;i++){
-    const r=req[i]; if(!r||r[cName]==null) continue;
-    const dept=r[cDept]; if(!INTERNAL[dept]) continue;
-    const st=r[cStat]; if(st!=='Approved'&&st!=='Pending') continue;
-    const key=POLICY[r[cPol]]; if(!key) continue;
-    const days=(Number(r[cDur])||0)/8;
-    let taken;
+  var rec={};
+  function get(name,dept){ if(!rec[name])rec[name]={name:titleCaseName(name),raw:name,dept:INTERNAL[dept],ptoTaken:0,ptoFuture:0,ptoBal:0,bonusTaken:0,bonusFuture:0,bonusBal:0,sickTaken:0,sickFuture:0}; return rec[name];}
+  for(var i=1;i<req.length;i++){
+    var r=req[i]; if(!r||r[cName]==null) continue;
+    var dept=r[cDept]; if(!INTERNAL[dept]) continue;
+    var st=r[cStat]; if(st!=='Approved'&&st!=='Pending') continue;
+    var key=POLICY[r[cPol]]; if(!key) continue;
+    var days=(Number(r[cDur])||0)/8;
+    var taken;
     if(cTim!=null && r[cTim]) taken = (r[cTim]==='Taken');
-    else { const d=toDate(r[cReqD]); taken = d ? d < ref : true; }
-    const e=get(r[cName],dept);
+    else { var d=toDate(r[cReqD]); taken = d ? d < ref : true; }
+    var e=get(r[cName],dept);
     e[key+(taken?'Taken':'Future')] += days;
   }
-  // balances (PTO + Earned Bonus Days)
-  const shBal = wb.SheetNames.find(s=>/balance/i.test(s));
+  var shBal = wb.SheetNames.find(function(s){return /balance/i.test(s);});
   if(shBal){
-    const bal = XLSX.utils.sheet_to_json(wb.Sheets[shBal],{header:1,raw:true});
-    const bm=headerMap(bal);
-    const bName=bm['NAME'],bDept=bm['HOME DEPARTMENT'],bStat=bm['EMPLOYEE STATUS'],bPol=bm['POLICY NAME'],bAmt=bm['BALANCE AMOUNT'];
-    for(let i=1;i<bal.length;i++){
-      const r=bal[i]; if(!r||r[bName]==null||String(r[bName]).startsWith('Totals'))continue;
-      const dept=r[bDept]; if(!INTERNAL[dept])continue;
-      if(r[bStat]!=='A - Active')continue;
-      const amt=(Number(r[bAmt])||0)/8;
-      if(r[bPol]==='PTO') get(r[bName],dept).ptoBal += amt;
-      else if(r[bPol]==='Earned Bonus Days') get(r[bName],dept).bonusBal += amt;
+    var bal = XLSX.utils.sheet_to_json(wb.Sheets[shBal],{header:1,raw:true});
+    var bm=headerMap(bal);
+    var bName=bm['NAME'],bDept=bm['HOME DEPARTMENT'],bStat=bm['EMPLOYEE STATUS'],bPol=bm['POLICY NAME'],bAmt=bm['BALANCE AMOUNT'];
+    for(var j=1;j<bal.length;j++){
+      var b=bal[j]; if(!b||b[bName]==null||String(b[bName]).indexOf('Totals')===0)continue;
+      var bd=b[bDept]; if(!INTERNAL[bd])continue;
+      if(b[bStat]!=='A - Active')continue;
+      var amt=(Number(b[bAmt])||0)/8;
+      if(b[bPol]==='PTO') get(b[bName],bd).ptoBal += amt;
+      else if(b[bPol]==='Earned Bonus Days') get(b[bName],bd).bonusBal += amt;
     }
   }
-  const people=Object.values(rec).map(e=>{for(const k in e){if(typeof e[k]==='number')e[k]=Math.round(e[k]*100)/100;}return e;});
-  people.sort((a,b)=>a.name.localeCompare(b.name));
-  const today=new Date().toISOString().slice(0,10);
-  return {reportDate:today, generated:today, people};
+  var people=Object.keys(rec).map(function(k){var e=rec[k];for(var kk in e){if(typeof e[kk]==='number')e[kk]=Math.round(e[kk]*100)/100;}return e;});
+  people.sort(function(a,b){return a.name.localeCompare(b.name);});
+  var today=new Date().toISOString().slice(0,10);
+  return {reportDate:today, generated:today, people:people};
 }
 
 /* ---------- Rendering helpers ---------- */
-const D = n => (Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});
-function fmtDate(s){const d=new Date(s+'T00:00');return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});}
-
-// map generic sort keys to metric-specific fields
+function D(n){return (Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});}
+function fmtDate(s){var d=new Date(s+'T00:00');return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});}
 function fieldFor(k){
   if(k==='taken') return metric==='pto'?'ptoTaken':'bonusTaken';
   if(k==='future') return metric==='pto'?'ptoFuture':'bonusBal';
   if(k==='bal') return metric==='pto'?'ptoBal':'bonusBal';
   return k;
 }
-
 function currentRows(){
-  const q=(document.getElementById('search').value||'').toLowerCase();
-  let rows=DATA.people.filter(p=>deptFilter==='All'||p.dept===deptFilter);
-  if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q));
-  const k=sortState.k, dir=sortState.dir;
-  rows.sort((a,b)=>{
-    let av,bv;
+  var q=(document.getElementById('search').value||'').toLowerCase();
+  var rows=DATA.people.filter(function(p){return deptFilter==='All'||p.dept===deptFilter;});
+  if(q) rows=rows.filter(function(p){return p.name.toLowerCase().indexOf(q)>-1;});
+  var k=sortState.k, dir=sortState.dir;
+  rows.sort(function(a,b){
+    var av,bv;
     if(k==='total'){
       if(metric==='pto'){av=a.ptoTaken+a.ptoFuture;bv=b.ptoTaken+b.ptoFuture;}
       else{av=a.bonusTaken+a.bonusBal;bv=b.bonusTaken+b.bonusBal;}
     }
     else if(k==='name'||k==='dept'){return dir*String(a[k]).localeCompare(String(b[k]));}
-    else{const f=fieldFor(k);av=a[f];bv=b[f];}
-    return dir*((av>bv)-(av<bv));
+    else{var f=fieldFor(k);av=a[f];bv=b[f];}
+    return dir*((av>bv?1:0)-(av<bv?1:0));
   });
   return rows;
 }
-
 function renderKpis(){
-  const p=DATA.people;
-  const sum=k=>p.reduce((s,x)=>s+x[k],0);
-  const lowN=p.filter(x=>x.ptoBal<x.ptoFuture).length;
-  const earners=p.filter(x=>x.bonusBal>0||x.bonusTaken>0).length;
-  const k=document.getElementById('kpis');
-  k.innerHTML=`
-    <div class="kpi"><div class="lab">Internal Employees</div><div class="val">${p.length}</div></div>
-    <div class="kpi"><div class="lab">PTO Taken (YTD)</div><div class="val">${D(sum('ptoTaken'))} <span class="unit">days</span></div></div>
-    <div class="kpi alt"><div class="lab">Future PTO Requested</div><div class="val">${D(sum('ptoFuture'))} <span class="unit">days</span></div></div>
-    <div class="kpi"><div class="lab">PTO Balance</div><div class="val">${D(sum('ptoBal'))} <span class="unit">days</span></div></div>
-    <div class="kpi gold"><div class="lab">Bonus Days Taken</div><div class="val">${D(sum('bonusTaken'))} <span class="unit">days</span></div></div>
-    <div class="kpi gold"><div class="lab">Bonus Days Remaining</div><div class="val">${D(sum('bonusBal'))} <span class="unit">days</span></div><div class="lab" style="margin-top:4px;text-transform:none;letter-spacing:0">${earners} earning</div></div>`;
+  var p=DATA.people;
+  function sum(k){return p.reduce(function(s,x){return s+x[k];},0);}
+  var earners=p.filter(function(x){return x.bonusBal>0||x.bonusTaken>0;}).length;
+  document.getElementById('kpis').innerHTML=
+    '<div class="kpi"><div class="lab">Internal Employees</div><div class="val">'+p.length+'</div></div>'+
+    '<div class="kpi"><div class="lab">PTO Taken (YTD)</div><div class="val">'+D(sum('ptoTaken'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi alt"><div class="lab">Future PTO Requested</div><div class="val">'+D(sum('ptoFuture'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi"><div class="lab">PTO Balance</div><div class="val">'+D(sum('ptoBal'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi gold"><div class="lab">Bonus Days Taken</div><div class="val">'+D(sum('bonusTaken'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi gold"><div class="lab">Bonus Days Remaining</div><div class="val">'+D(sum('bonusBal'))+' <span class="unit">days</span></div><div class="lab" style="margin-top:4px;text-transform:none;letter-spacing:0">'+earners+' earning</div></div>';
 }
-
 function renderChips(){
-  const depts=['All',...Array.from(new Set(DATA.people.map(p=>p.dept))).sort()];
-  document.getElementById('deptChips').innerHTML=depts.map(d=>`<span class="chip ${d===deptFilter?'on':''}" onclick="setDept('${d}')">${d}</span>`).join('');
+  var depts=['All'].concat(Array.from(new Set(DATA.people.map(function(p){return p.dept;}))).sort());
+  document.getElementById('deptChips').innerHTML=depts.map(function(d){return '<span class="chip '+(d===deptFilter?'on':'')+'" onclick="setDept(\''+d+'\')">'+d+'</span>';}).join('');
 }
 function setDept(d){deptFilter=d;render();}
 function setMetric(m){
@@ -289,52 +281,122 @@ function setMetric(m){
   document.getElementById('mBon').className='chip'+(m==='bonus'?' on gold':'');
   render();
 }
-
 function renderChart(rows){
-  const labels=rows.map(r=>r.name);
-  document.querySelector('.chartwrap').style.height=Math.max(360,rows.length*22+80)+'px';
-  let datasets, leg;
+  var wrap=document.querySelector('.chartwrap');
+  if(typeof Chart==='undefined'){
+    wrap.innerHTML='<div style="color:var(--gray);font-size:13px;padding:20px 0">Chart library unavailable — the table below has all the data.</div>';
+    return;
+  }
+  var labels=rows.map(function(r){return r.name;});
+  wrap.style.height=Math.max(360,rows.length*22+80)+'px';
+  var datasets, leg;
   if(metric==='pto'){
     datasets=[
-      {label:'Taken (YTD)',data:rows.map(r=>r.ptoTaken),backgroundColor:'#B0DD66'},
-      {label:'Future requested',data:rows.map(r=>r.ptoFuture),backgroundColor:'#747777'}];
-    leg=`<span><i class="sw" style="background:var(--green)"></i> Taken (YTD)</span><span><i class="sw" style="background:var(--gray)"></i> Future requested</span>`;
+      {label:'Taken (YTD)',data:rows.map(function(r){return r.ptoTaken;}),backgroundColor:'#B0DD66'},
+      {label:'Future requested',data:rows.map(function(r){return r.ptoFuture;}),backgroundColor:'#747777'}];
+    leg='<span><i class="sw" style="background:var(--green)"></i> Taken (YTD)</span><span><i class="sw" style="background:var(--gray)"></i> Future requested</span>';
   }else{
     datasets=[
-      {label:'Bonus taken',data:rows.map(r=>r.bonusTaken),backgroundColor:'#d9a441'},
-      {label:'Bonus remaining',data:rows.map(r=>r.bonusBal),backgroundColor:'#ecd9ac'}];
-    leg=`<span><i class="sw" style="background:var(--gold)"></i> Bonus taken</span><span><i class="sw" style="background:#ecd9ac"></i> Bonus remaining (available)</span>`;
+      {label:'Bonus taken',data:rows.map(function(r){return r.bonusTaken;}),backgroundColor:'#d9a441'},
+      {label:'Bonus remaining',data:rows.map(function(r){return r.bonusBal;}),backgroundColor:'#ecd9ac'}];
+    leg='<span><i class="sw" style="background:var(--gold)"></i> Bonus taken</span><span><i class="sw" style="background:#ecd9ac"></i> Bonus remaining (available)</span>';
   }
   document.getElementById('legend').innerHTML=leg;
-  const cfg={type:'bar',data:{labels,datasets},
+  var cfg={type:'bar',data:{labels:labels,datasets:datasets},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       scales:{x:{stacked:true,title:{display:true,text:'Days'}},y:{stacked:true,ticks:{font:{size:11}}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${D(c.raw)} d`}}}}};
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+D(c.raw)+' d';}}}}}};
   if(chart){chart.data=cfg.data;chart.options=cfg.options;chart.update();}
   else chart=new Chart(document.getElementById('chart'),cfg);
 }
-
 function renderTable(rows){
-  const tb=document.getElementById('tbody');
-  tb.innerHTML=rows.map(r=>{
-    const tot=r.ptoTaken+r.ptoFuture||0.0001;
-    const tp=r.ptoTaken/tot*100, fp=r.ptoFuture/tot*100;
-    const low=r.ptoBal<r.ptoFuture;
-    const bb=r.bonusBal>0;
-    return `<tr>
-      <td class="name">${r.name}</td>
-      <td><span class="deptbadge">${r.dept}</span></td>
-      <td class="num grp-pto">${D(r.ptoTaken)}</td>
-      <td class="num">${D(r.ptoFuture)}</td>
-      <td class="num ${low?'flag':''}">${D(r.ptoBal)}${low?' ⚠':''}</td>
-      <td class="bar-cell"><div class="mini"><div class="t" style="width:${tp}%"></div><div class="f" style="width:${fp}%"></div></div></td>
-      <td class="num grp-bon">${D(r.bonusTaken)}</td>
-      <td class="num ${bb?'goldtxt':''}">${D(r.bonusBal)}</td>
-      <td class="num">${D(r.sickTaken)}</td>
-    </tr>`;}).join('');
-  const sum=k=>rows.reduce((s,x)=>s+x[k],0);
+  document.getElementById('tbody').innerHTML=rows.map(function(r){
+    var tot=r.ptoTaken+r.ptoFuture||0.0001;
+    var tp=r.ptoTaken/tot*100, fp=r.ptoFuture/tot*100;
+    var low=r.ptoBal<r.ptoFuture;
+    var bb=r.bonusBal>0;
+    return '<tr>'+
+      '<td class="name">'+r.name+'</td>'+
+      '<td><span class="deptbadge">'+r.dept+'</span></td>'+
+      '<td class="num grp-pto">'+D(r.ptoTaken)+'</td>'+
+      '<td class="num">'+D(r.ptoFuture)+'</td>'+
+      '<td class="num '+(low?'flag':'')+'">'+D(r.ptoBal)+(low?' ⚠':'')+'</td>'+
+      '<td class="bar-cell"><div class="mini"><div class="t" style="width:'+tp+'%"></div><div class="f" style="width:'+fp+'%"></div></div></td>'+
+      '<td class="num grp-bon">'+D(r.bonusTaken)+'</td>'+
+      '<td class="num '+(bb?'goldtxt':'')+'">'+D(r.bonusBal)+'</td>'+
+      '<td class="num">'+D(r.sickTaken)+'</td>'+
+    '</tr>';}).join('');
+  function sum(k){return rows.reduce(function(s,x){return s+x[k];},0);}
   document.getElementById('tfoot').innerHTML=
-    `<td>Total · ${rows.length}</td><td></td><td class="num">${D(sum('ptoTaken'))}</td><td class="num">${D(sum('ptoFuture'))}</td><td class="num">${D(sum('ptoBal'))}</td><td></td><td class="num">${D(sum('bonusTaken'))}</td><td class="num">${D(sum('bonusBal'))}</td><td class="num">${D(sum('sickTaken'))}</td>`;
+    '<td>Total · '+rows.length+'</td><td></td><td class="num">'+D(sum('ptoTaken'))+'</td><td class="num">'+D(sum('ptoFuture'))+'</td><td class="num">'+D(sum('ptoBal'))+'</td><td></td><td class="num">'+D(sum('bonusTaken'))+'</td><td class="num">'+D(sum('bonusBal'))+'</td><td class="num">'+D(sum('sickTaken'))+'</td>';
+}
+function render(){
+  sortState.k=document.getElementById('sortBy').value;
+  var rows=currentRows();
+  renderKpis(); renderChips(); renderTable(rows);
+  document.getElementById('periodLabel').textContent='YTD 2026 · data as of '+fmtDate(DATA.reportDate);
+  document.getElementById('foot').textContent='Innovien Solutions · Internal PTO Dashboard · Generated '+fmtDate(DATA.generated)+' · Confidential — leadership use';
+  document.getElementById('chartTitle').textContent = metric==='pto'
+    ? 'PTO by Person — Taken vs. Future Requested'
+    : 'Earned Bonus Days by Person — Taken vs. Remaining';
+  document.getElementById('chartSub').textContent = metric==='pto'
+    ? 'Days off. Sorted by total. Filter by department or search a name.'
+    : 'Quarterly incentive days. Green bars = still available to use.';
+  try{ renderChart(rows); }catch(e){ document.querySelector('.chartwrap').innerHTML='<div style="color:var(--gray);font-size:13px;padding:20px 0">Chart could not render — the table below has all the data.</div>'; }
 }
 
-fun
+/* header sort clicks */
+Array.prototype.forEach.call(document.querySelectorAll('#tbl th[data-k]'),function(th){
+  th.onclick=function(){
+    var k=th.dataset.k;
+    var rows=DATA.people.filter(function(p){return deptFilter==='All'||p.dept===deptFilter;})
+      .filter(function(p){var q=(document.getElementById('search').value||'').toLowerCase();return !q||p.name.toLowerCase().indexOf(q)>-1;});
+    if(k==='name'||k==='dept'){sortState={k:k,dir:1};rows.sort(function(a,b){return String(a[k]).localeCompare(String(b[k]));});}
+    else{sortState.dir=(sortState._exact===k?-sortState.dir:-1);sortState._exact=k;rows.sort(function(a,b){return sortState.dir*((a[k]>b[k]?1:0)-(a[k]<b[k]?1:0));});}
+    renderChart(rows);renderTable(rows);
+  };
+});
+
+/* ---------- Refresh UI ---------- */
+function openModal(){document.getElementById('modal').style.display='flex';}
+function closeModal(){document.getElementById('modal').style.display='none';document.getElementById('msg').textContent='';}
+function toast(t){var el=document.getElementById('toast');el.textContent=t;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},2600);}
+function handleFile(file){
+  var msg=document.getElementById('msg'); msg.style.color='var(--gray)'; msg.textContent='Reading '+file.name+' …';
+  if(typeof XLSX==='undefined'){msg.style.color='var(--red)';msg.textContent='Excel reader not loaded — check your internet connection and reload.';return;}
+  var rd=new FileReader();
+  rd.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      var nd=buildFromWorkbook(wb);
+      if(!nd.people.length) throw new Error('No internal employees found in the file.');
+      DATA=nd; deptFilter='All'; render();
+      msg.textContent='';
+      toast('Dashboard refreshed — '+nd.people.length+' internal employees.');
+      setTimeout(closeModal,600);
+    }catch(err){msg.style.color='var(--red)';msg.textContent='Could not read file: '+err.message;}
+  };
+  rd.readAsArrayBuffer(file);
+}
+var drop=document.getElementById('drop');
+document.getElementById('file').addEventListener('change',function(e){if(e.target.files[0])handleFile(e.target.files[0]);});
+['dragover','dragenter'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('drag');});});
+['dragleave','drop'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove('drag');});});
+drop.addEventListener('drop',function(e){if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+
+/* ---------- CSV export ---------- */
+function exportCsv(){
+  var rows=currentRows();
+  var head=['Employee','Department','PTO Taken (days)','Future PTO (days)','PTO Balance (days)','Bonus Taken (days)','Bonus Remaining (days)','Sick Internal (days)'];
+  var lines=[head.join(',')].concat(rows.map(function(r){return [r.name,r.dept,r.ptoTaken,r.ptoFuture,r.ptoBal,r.bonusTaken,r.bonusBal,r.sickTaken].join(',');}));
+  var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Innovien_PTO_'+DATA.reportDate+'.csv';a.click();
+}
+
+/* ---------- Init (run after everything, even if a CDN lib is slow) ---------- */
+function init(){ try{ render(); }catch(e){ document.getElementById('periodLabel').textContent='Error rendering: '+e.message; } }
+if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',init);
+else init();
+</script>
+</body>
+</html>
