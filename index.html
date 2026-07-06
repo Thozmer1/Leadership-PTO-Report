@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Innovien PTO Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --green:#B0DD66; --green-d:#8fbf42; --gray:#747777; --gray-l:#eceded;
+    --gold:#d9a441; --red:#E74C3C; --ink:#2b2d2d; --card:#ffffff; --bg:#f4f6f2; --line:#e2e5df;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',Calibri,-apple-system,sans-serif;background:var(--bg);color:var(--ink);}
+  header{background:#fff;border-bottom:4px solid var(--green);padding:20px 32px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;}
+  .brand{display:flex;align-items:center;gap:14px}
+  .logo{width:42px;height:42px;border-radius:9px;background:var(--green);display:flex;align-items:center;justify-content:center;font-weight:800;color:#2b2d2d;font-size:20px}
+  h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.3px}
+  .sub{color:var(--gray);font-size:13px;margin-top:2px}
+  .hactions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  button{font-family:inherit;cursor:pointer;border:none;border-radius:8px;font-size:13px;font-weight:600;padding:9px 16px}
+  .btn-primary{background:var(--green);color:#2b2d2d}
+  .btn-primary:hover{background:var(--green-d)}
+  .btn-ghost{background:#fff;color:var(--gray);border:1px solid var(--line)}
+  .btn-ghost:hover{border-color:var(--gray)}
+  main{padding:24px 32px;max-width:1280px;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;border-left:5px solid var(--green)}
+  .kpi .lab{font-size:11.5px;color:var(--gray);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+  .kpi .val{font-size:28px;font-weight:800;margin-top:6px;line-height:1}
+  .kpi .unit{font-size:13px;color:var(--gray);font-weight:600}
+  .kpi.alt{border-left-color:var(--gray)}
+  .kpi.gold{border-left-color:var(--gold)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin-bottom:22px}
+  .panel h2{font-size:15px;margin:0 0 4px;font-weight:700}
+  .panel .ph-sub{color:var(--gray);font-size:12px;margin:0 0 16px}
+  .phead{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
+  .toggle{display:flex;gap:6px}
+  .toggle .chip{border-radius:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:#fff;border:1px solid var(--line);color:var(--gray);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer}
+  .chip.on{background:var(--green);color:#2b2d2d;border-color:var(--green)}
+  .chip.on.gold{background:var(--gold);color:#fff;border-color:var(--gold)}
+  input[type=search]{flex:1;min-width:180px;padding:9px 14px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px}
+  .chartwrap{position:relative;height:520px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{background:var(--gray-l);color:var(--gray);text-transform:uppercase;font-size:11px;letter-spacing:.4px;cursor:pointer;user-select:none;white-space:nowrap}
+  th.num,td.num{text-align:right}
+  tbody tr:hover{background:#fafbf8}
+  td.name{font-weight:600}
+  .deptbadge{font-size:11px;color:var(--gray);background:var(--gray-l);padding:2px 8px;border-radius:6px}
+  .flag{color:var(--red);font-weight:700}
+  .goldtxt{color:var(--gold);font-weight:700}
+  .grp-pto{border-left:3px solid var(--green-d)}
+  .grp-bon{border-left:3px solid var(--gold)}
+  .bar-cell{min-width:110px}
+  .mini{height:8px;border-radius:4px;background:var(--gray-l);overflow:hidden;display:flex}
+  .mini .t{background:var(--green)}
+  .mini .f{background:var(--gray)}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--gray);margin-bottom:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;color:var(--gray);font-size:13px;background:#fff}
+  .drop.drag{border-color:var(--green);background:#f6fbee}
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:50}
+  #modal .box{background:#fff;border-radius:14px;padding:26px;max-width:520px;width:92%}
+  .foot{color:var(--gray);font-size:11px;text-align:center;margin:30px 0 10px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:8px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1}
+  @media print{header .hactions{display:none}.drop,#refreshPanel{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">iQ</div>
+    <div>
+      <h1>PTO Dashboard <span style="color:var(--gray);font-weight:600">· Internal Team</span></h1>
+      <div class="sub" id="periodLabel">Loading…</div>
+    </div>
+  </div>
+  <div class="hactions">
+    <button class="btn-ghost" onclick="window.print()">🖨 Print / PDF</button>
+    <button class="btn-ghost" onclick="exportCsv()">⬇ Export CSV</button>
+    <button class="btn-primary" onclick="openModal()">⟳ Refresh Data</button>
+  </div>
+</header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="panel">
+    <div class="phead">
+      <div>
+        <h2 id="chartTitle">PTO by Person — Taken vs. Future Requested</h2>
+        <p class="ph-sub" id="chartSub">Days off. Sorted by total. Filter by department or search a name.</p>
+      </div>
+      <div class="toggle">
+        <span class="chip on" id="mPto" onclick="setMetric('pto')">PTO</span>
+        <span class="chip" id="mBon" onclick="setMetric('bonus')">Earned Bonus Days</span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="chips" id="deptChips"></div>
+      <input type="search" id="search" placeholder="Search a name…" oninput="render()">
+      <select id="sortBy" onchange="render()" style="padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px">
+        <option value="total">Sort: Total</option>
+        <option value="taken">Sort: Taken</option>
+        <option value="future">Sort: Future / Remaining</option>
+        <option value="bal">Sort: Balance</option>
+        <option value="name">Sort: Name (A–Z)</option>
+      </select>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="chartwrap"><canvas id="chart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2>Detail by Person</h2>
+    <p class="ph-sub">PTO remaining shown in <span class="flag">red</span> when below future PTO requested. Earned bonus days are quarterly incentive days — <span class="goldtxt">gold</span> shows days still available. Click any column header to sort.</p>
+    <div style="overflow-x:auto">
+      <table id="tbl">
+        <thead><tr>
+          <th data-k="name">Employee</th>
+          <th data-k="dept">Department</th>
+          <th data-k="ptoTaken" class="num grp-pto">PTO Taken</th>
+          <th data-k="ptoFuture" class="num">Future PTO</th>
+          <th data-k="ptoBal" class="num">PTO Balance</th>
+          <th class="bar-cell">Taken vs Future</th>
+          <th data-k="bonusTaken" class="num grp-bon">Bonus Taken</th>
+          <th data-k="bonusBal" class="num">Bonus Remaining</th>
+          <th data-k="sickTaken" class="num">Sick (Int.)</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+        <tfoot><tr id="tfoot" style="font-weight:700;background:var(--gray-l)"></tr></tfoot>
+      </table>
+    </div>
+    <p class="ph-sub" style="margin-top:12px">All figures in days (8 hrs = 1 day). Includes Approved &amp; Pending requests for internal departments only (Recruiting, Account Mgmt, Operations, Finance, TA Partner). Client-site consultants excluded. Earned bonus days accrue quarterly.</p>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<!-- Refresh modal -->
+<div id="modal">
+  <div class="box">
+    <h2 style="margin:0 0 6px">Refresh with a new export</h2>
+    <p style="color:var(--gray);font-size:13px;margin:0 0 16px">Drop your monthly <b>ELT Time Off Requests</b> Excel export below. The dashboard recomputes PTO, bonus days and balances automatically — nothing else to edit.</p>
+    <div class="drop" id="drop">
+      <div style="font-size:34px">📄</div>
+      <div>Drag &amp; drop the .xlsx here, or <label style="color:var(--green-d);font-weight:700;cursor:pointer;text-decoration:underline">browse<input type="file" id="file" accept=".xlsx,.xls" style="display:none"></label></div>
+      <div style="margin-top:8px;font-size:11px">Reads the “Time Off Request” and “Time Off Balance Summary” tabs.</div>
+    </div>
+    <div id="msg" style="font-size:12px;color:var(--gray);margin-top:12px;min-height:16px"></div>
+    <div style="text-align:right;margin-top:14px"><button class="btn-ghost" onclick="closeModal()">Close</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- Embedded current data (YTD, as of report date) ---------- */
+const EMBEDDED = {"reportDate":"2026-06-12","generated":"2026-07-06","people":[{"name":"Adam Williams","raw":"Williams, Adam","dept":"Recruiting","ptoTaken":14.0,"ptoFuture":0.0,"ptoBal":4.0,"bonusTaken":2.5,"bonusFuture":0.0,"bonusBal":4.5,"sickTaken":3.5,"sickFuture":0.0},{"name":"Benjamin Dorsey","raw":"Dorsey, Benjamin","dept":"Recruiting","ptoTaken":3.5,"ptoFuture":0.0,"ptoBal":10.5,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Brandon Dowdell","raw":"Dowdell, Brandon","dept":"Recruiting","ptoTaken":7.5,"ptoFuture":0.0,"ptoBal":11.25,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":2.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Brennan Elizabeth Lantz","raw":"Lantz, Brennan Elizabeth","dept":"Recruiting","ptoTaken":7.0,"ptoFuture":5.0,"ptoBal":12.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":4.0,"sickFuture":0.0},{"name":"Brie Zagoria","raw":"Zagoria, Brie","dept":"Account Mgmt","ptoTaken":1.88,"ptoFuture":2.0,"ptoBal":12.12,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Chelsea Nicolle Navarro","raw":"Navarro, Chelsea Nicolle","dept":"Recruiting","ptoTaken":7.75,"ptoFuture":8.0,"ptoBal":11.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":4.0,"sickFuture":0.0},{"name":"Courtney Smith","raw":"Smith, Courtney","dept":"Recruiting","ptoTaken":11.0,"ptoFuture":1.0,"ptoBal":25.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Craig Coates","raw":"Coates, Craig","dept":"Account Mgmt","ptoTaken":0.0,"ptoFuture":0.0,"ptoBal":15.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Daniel Bostock","raw":"Bostock, Daniel","dept":"Recruiting","ptoTaken":3.0,"ptoFuture":0.0,"ptoBal":9.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Daniela Tarailo Blesich","raw":"Blesich, Daniela Tarailo","dept":"Account Mgmt","ptoTaken":5.0,"ptoFuture":2.0,"ptoBal":19.0,"bonusTaken":3.0,"bonusFuture":0.0,"bonusBal":1.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Elizabeth Wade","raw":"Wade, Elizabeth","dept":"Operations","ptoTaken":3.38,"ptoFuture":4.62,"ptoBal":16.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Gloria Manley","raw":"MANLEY, GLORIA","dept":"Recruiting","ptoTaken":13.25,"ptoFuture":0.0,"ptoBal":17.75,"bonusTaken":1.0,"bonusFuture":0.0,"bonusBal":6.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Hannah Craig","raw":"Craig, Hannah","dept":"Account Mgmt","ptoTaken":5.0,"ptoFuture":0.0,"ptoBal":20.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":2.0,"sickFuture":0.0},{"name":"Hayley Pinkston","raw":"Pinkston, Hayley","dept":"Operations","ptoTaken":0.0,"ptoFuture":0.0,"ptoBal":10.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Henry Stephen Denzel","raw":"Denzel, Henry Stephen","dept":"Account Mgmt","ptoTaken":3.0,"ptoFuture":6.0,"ptoBal":23.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":3.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Jamie Houvig","raw":"Houvig, Jamie","dept":"Recruiting","ptoTaken":3.38,"ptoFuture":1.0,"ptoBal":21.62,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":2.0,"sickFuture":0.0},{"name":"Jennifer Greene Snyder","raw":"Snyder, Jennifer Greene","dept":"TA Partner","ptoTaken":8.0,"ptoFuture":2.0,"ptoBal":16.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Jessica Mackenzie Evans","raw":"Evans, Jessica Mackenzie","dept":"Account Mgmt","ptoTaken":3.0,"ptoFuture":0.0,"ptoBal":20.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Jesu Philip","raw":"Philip, Jesu","dept":"Account Mgmt","ptoTaken":0.0,"ptoFuture":0.0,"ptoBal":19.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"John Pack","raw":"Pack, John","dept":"Account Mgmt","ptoTaken":2.0,"ptoFuture":1.0,"ptoBal":17.0,"bonusTaken":2.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.38,"sickFuture":0.0},{"name":"Johnna Fusco","raw":"Fusco, Johnna","dept":"Account Mgmt","ptoTaken":4.0,"ptoFuture":6.0,"ptoBal":12.0,"bonusTaken":2.0,"bonusFuture":0.0,"bonusBal":2.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Jordan Foote","raw":"Foote, Jordan Christopher Foote","dept":"Recruiting","ptoTaken":7.0,"ptoFuture":0.0,"ptoBal":7.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Julia Mcdonald","raw":"McDonald, Julia","dept":"Recruiting","ptoTaken":8.5,"ptoFuture":5.0,"ptoBal":11.5,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.25,"sickFuture":0.0},{"name":"Kelsie Laughlin","raw":"Laughlin, Kelsie","dept":"Account Mgmt","ptoTaken":8.5,"ptoFuture":1.0,"ptoBal":19.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":8.0,"sickTaken":2.38,"sickFuture":0.0},{"name":"Kollin Korell","raw":"Korell, Kollin","dept":"Account Mgmt","ptoTaken":0.0,"ptoFuture":0.0,"ptoBal":17.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Luke Reineke","raw":"Reineke, Luke","dept":"Recruiting","ptoTaken":7.38,"ptoFuture":1.0,"ptoBal":5.62,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":3.0,"sickFuture":0.38},{"name":"Meredith Bevill","raw":"Bevill, Meredith","dept":"Operations","ptoTaken":6.0,"ptoFuture":4.5,"ptoBal":9.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":3.0,"sickFuture":0.0},{"name":"Merrimon Mccartney","raw":"McCartney, Merrimon","dept":"Recruiting","ptoTaken":15.0,"ptoFuture":5.0,"ptoBal":3.0,"bonusTaken":2.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":0.0,"sickFuture":2.0},{"name":"Michael Anthony Minnillo","raw":"Minnillo, Michael Anthony","dept":"Account Mgmt","ptoTaken":10.88,"ptoFuture":1.62,"ptoBal":18.12,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Michael Murphy","raw":"Murphy, Michael","dept":"Recruiting","ptoTaken":7.5,"ptoFuture":2.0,"ptoBal":12.5,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Michaela Pierce","raw":"Pierce, Michaela","dept":"Recruiting","ptoTaken":3.06,"ptoFuture":5.0,"ptoBal":9.81,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":2.0,"sickTaken":0.5,"sickFuture":0.0},{"name":"Mollie Ferguson","raw":"Ferguson, Mollie","dept":"Operations","ptoTaken":10.0,"ptoFuture":12.0,"ptoBal":19.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":15.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Monika Duvarney","raw":"DuVarney, Monika","dept":"Recruiting","ptoTaken":11.0,"ptoFuture":4.0,"ptoBal":22.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Riley Laverty","raw":"Laverty, Riley","dept":"Recruiting","ptoTaken":0.0,"ptoFuture":0.0,"ptoBal":14.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":5.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Ryan Mickley","raw":"Mickley, Ryan","dept":"Recruiting","ptoTaken":0.75,"ptoFuture":0.0,"ptoBal":13.25,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Shannon Johnson","raw":"Johnson, Shannon","dept":"Account Mgmt","ptoTaken":4.0,"ptoFuture":7.0,"ptoBal":21.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Stephanie Malia Graham","raw":"Graham, Stephanie Malia","dept":"Account Mgmt","ptoTaken":8.0,"ptoFuture":1.0,"ptoBal":24.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":0.0,"sickFuture":0.0},{"name":"Taylor Hosmer","raw":"Hosmer, Taylor","dept":"Finance","ptoTaken":10.5,"ptoFuture":6.0,"ptoBal":20.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":1.0,"sickFuture":0.0},{"name":"Victoria Eve Bonilla","raw":"Bonilla, Victoria Eve","dept":"Recruiting","ptoTaken":12.0,"ptoFuture":0.0,"ptoBal":20.0,"bonusTaken":0.0,"bonusFuture":0.0,"bonusBal":0.0,"sickTaken":1.0,"sickFuture":0.0}]};
+
+/* ---------- State ---------- */
+let DATA = EMBEDDED;
+let deptFilter = 'All';
+let metric = 'pto';           // 'pto' | 'bonus'
+let sortState = {k:'total', dir:-1};
+let chart;
+
+/* ---------- Refresh parsing logic (mirrors source build) ---------- */
+const INTERNAL = {
+  'RECRUI-Recruiters':'Recruiting',
+  'AMANAG-Account Mangers':'Account Mgmt',
+  'OPS000-Operations':'Operations',
+  'FINANC-Finance':'Finance',
+  '000TAP-TA Partner':'TA Partner'
+};
+const POLICY = {'PTO':'pto','Sick Leave (Internal)':'sick','Earned Bonus Days':'bonus'};
+
+function titleCaseName(n){
+  if(n && n.indexOf(',')>-1){const[a,b]=n.split(',');return (b.trim()+' '+a.trim()).replace(/\w\S*/g,s=>s[0].toUpperCase()+s.slice(1).toLowerCase());}
+  return n||'';
+}
+function headerMap(rows){const h=rows[0]||[];const m={};h.forEach((c,i)=>{if(c)m[String(c).trim()]=i;});return m;}
+function toDate(v){ if(v instanceof Date) return v; if(typeof v==='number'){return new Date(Date.UTC(1899,11,30)+v*864e5);} if(typeof v==='string'){const p=v.split('/');if(p.length===3)return new Date(+p[2],+p[0]-1,+p[1]);const d=new Date(v);return isNaN(d)?null:d;} return null;}
+
+function buildFromWorkbook(wb){
+  const ref = new Date();  // split past/future by today when no Timing column
+  const shReq = wb.SheetNames.find(s=>/time off request/i.test(s));
+  if(!shReq) throw new Error('No “Time Off Request” tab found.');
+  const req = XLSX.utils.sheet_to_json(wb.Sheets[shReq],{header:1,raw:true});
+  const rm = headerMap(req);
+  const cName=rm['NAME'], cDept=rm['HOME DEPARTMENT'], cPol=rm['POLICY NAME'],
+        cStat=rm['REQUEST STATUS'], cDur=rm['DURATION'], cTim=rm['Timing'],
+        cReqD=rm['TIME OFF REQUEST DATE'];
+  if(cName==null||cDept==null||cDur==null) throw new Error('Request tab missing expected columns.');
+  const rec={};
+  const get=(name,dept)=>{ if(!rec[name])rec[name]={name:titleCaseName(name),raw:name,dept:INTERNAL[dept],ptoTaken:0,ptoFuture:0,ptoBal:0,bonusTaken:0,bonusFuture:0,bonusBal:0,sickTaken:0,sickFuture:0}; return rec[name];};
+  for(let i=1;i<req.length;i++){
+    const r=req[i]; if(!r||r[cName]==null) continue;
+    const dept=r[cDept]; if(!INTERNAL[dept]) continue;
+    const st=r[cStat]; if(st!=='Approved'&&st!=='Pending') continue;
+    const key=POLICY[r[cPol]]; if(!key) continue;
+    const days=(Number(r[cDur])||0)/8;
+    let taken;
+    if(cTim!=null && r[cTim]) taken = (r[cTim]==='Taken');
+    else { const d=toDate(r[cReqD]); taken = d ? d < ref : true; }
+    const e=get(r[cName],dept);
+    e[key+(taken?'Taken':'Future')] += days;
+  }
+  // balances (PTO + Earned Bonus Days)
+  const shBal = wb.SheetNames.find(s=>/balance/i.test(s));
+  if(shBal){
+    const bal = XLSX.utils.sheet_to_json(wb.Sheets[shBal],{header:1,raw:true});
+    const bm=headerMap(bal);
+    const bName=bm['NAME'],bDept=bm['HOME DEPARTMENT'],bStat=bm['EMPLOYEE STATUS'],bPol=bm['POLICY NAME'],bAmt=bm['BALANCE AMOUNT'];
+    for(let i=1;i<bal.length;i++){
+      const r=bal[i]; if(!r||r[bName]==null||String(r[bName]).startsWith('Totals'))continue;
+      const dept=r[bDept]; if(!INTERNAL[dept])continue;
+      if(r[bStat]!=='A - Active')continue;
+      const amt=(Number(r[bAmt])||0)/8;
+      if(r[bPol]==='PTO') get(r[bName],dept).ptoBal += amt;
+      else if(r[bPol]==='Earned Bonus Days') get(r[bName],dept).bonusBal += amt;
+    }
+  }
+  const people=Object.values(rec).map(e=>{for(const k in e){if(typeof e[k]==='number')e[k]=Math.round(e[k]*100)/100;}return e;});
+  people.sort((a,b)=>a.name.localeCompare(b.name));
+  const today=new Date().toISOString().slice(0,10);
+  return {reportDate:today, generated:today, people};
+}
+
+/* ---------- Rendering helpers ---------- */
+const D = n => (Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});
+function fmtDate(s){const d=new Date(s+'T00:00');return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});}
+
+// map generic sort keys to metric-specific fields
+function fieldFor(k){
+  if(k==='taken') return metric==='pto'?'ptoTaken':'bonusTaken';
+  if(k==='future') return metric==='pto'?'ptoFuture':'bonusBal';
+  if(k==='bal') return metric==='pto'?'ptoBal':'bonusBal';
+  return k;
+}
+
+function currentRows(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  let rows=DATA.people.filter(p=>deptFilter==='All'||p.dept===deptFilter);
+  if(q) rows=rows.filter(p=>p.name.toLowerCase().includes(q));
+  const k=sortState.k, dir=sortState.dir;
+  rows.sort((a,b)=>{
+    let av,bv;
+    if(k==='total'){
+      if(metric==='pto'){av=a.ptoTaken+a.ptoFuture;bv=b.ptoTaken+b.ptoFuture;}
+      else{av=a.bonusTaken+a.bonusBal;bv=b.bonusTaken+b.bonusBal;}
+    }
+    else if(k==='name'||k==='dept'){return dir*String(a[k]).localeCompare(String(b[k]));}
+    else{const f=fieldFor(k);av=a[f];bv=b[f];}
+    return dir*((av>bv)-(av<bv));
+  });
+  return rows;
+}
+
+function renderKpis(){
+  const p=DATA.people;
+  const sum=k=>p.reduce((s,x)=>s+x[k],0);
+  const lowN=p.filter(x=>x.ptoBal<x.ptoFuture).length;
+  const earners=p.filter(x=>x.bonusBal>0||x.bonusTaken>0).length;
+  const k=document.getElementById('kpis');
+  k.innerHTML=`
+    <div class="kpi"><div class="lab">Internal Employees</div><div class="val">${p.length}</div></div>
+    <div class="kpi"><div class="lab">PTO Taken (YTD)</div><div class="val">${D(sum('ptoTaken'))} <span class="unit">days</span></div></div>
+    <div class="kpi alt"><div class="lab">Future PTO Requested</div><div class="val">${D(sum('ptoFuture'))} <span class="unit">days</span></div></div>
+    <div class="kpi"><div class="lab">PTO Balance</div><div class="val">${D(sum('ptoBal'))} <span class="unit">days</span></div></div>
+    <div class="kpi gold"><div class="lab">Bonus Days Taken</div><div class="val">${D(sum('bonusTaken'))} <span class="unit">days</span></div></div>
+    <div class="kpi gold"><div class="lab">Bonus Days Remaining</div><div class="val">${D(sum('bonusBal'))} <span class="unit">days</span></div><div class="lab" style="margin-top:4px;text-transform:none;letter-spacing:0">${earners} earning</div></div>`;
+}
+
+function renderChips(){
+  const depts=['All',...Array.from(new Set(DATA.people.map(p=>p.dept))).sort()];
+  document.getElementById('deptChips').innerHTML=depts.map(d=>`<span class="chip ${d===deptFilter?'on':''}" onclick="setDept('${d}')">${d}</span>`).join('');
+}
+function setDept(d){deptFilter=d;render();}
+function setMetric(m){
+  metric=m;
+  document.getElementById('mPto').className='chip'+(m==='pto'?' on':'');
+  document.getElementById('mBon').className='chip'+(m==='bonus'?' on gold':'');
+  render();
+}
+
+function renderChart(rows){
+  const labels=rows.map(r=>r.name);
+  document.querySelector('.chartwrap').style.height=Math.max(360,rows.length*22+80)+'px';
+  let datasets, leg;
+  if(metric==='pto'){
+    datasets=[
+      {label:'Taken (YTD)',data:rows.map(r=>r.ptoTaken),backgroundColor:'#B0DD66'},
+      {label:'Future requested',data:rows.map(r=>r.ptoFuture),backgroundColor:'#747777'}];
+    leg=`<span><i class="sw" style="background:var(--green)"></i> Taken (YTD)</span><span><i class="sw" style="background:var(--gray)"></i> Future requested</span>`;
+  }else{
+    datasets=[
+      {label:'Bonus taken',data:rows.map(r=>r.bonusTaken),backgroundColor:'#d9a441'},
+      {label:'Bonus remaining',data:rows.map(r=>r.bonusBal),backgroundColor:'#ecd9ac'}];
+    leg=`<span><i class="sw" style="background:var(--gold)"></i> Bonus taken</span><span><i class="sw" style="background:#ecd9ac"></i> Bonus remaining (available)</span>`;
+  }
+  document.getElementById('legend').innerHTML=leg;
+  const cfg={type:'bar',data:{labels,datasets},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      scales:{x:{stacked:true,title:{display:true,text:'Days'}},y:{stacked:true,ticks:{font:{size:11}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${D(c.raw)} d`}}}}};
+  if(chart){chart.data=cfg.data;chart.options=cfg.options;chart.update();}
+  else chart=new Chart(document.getElementById('chart'),cfg);
+}
+
+function renderTable(rows){
+  const tb=document.getElementById('tbody');
+  tb.innerHTML=rows.map(r=>{
+    const tot=r.ptoTaken+r.ptoFuture||0.0001;
+    const tp=r.ptoTaken/tot*100, fp=r.ptoFuture/tot*100;
+    const low=r.ptoBal<r.ptoFuture;
+    const bb=r.bonusBal>0;
+    return `<tr>
+      <td class="name">${r.name}</td>
+      <td><span class="deptbadge">${r.dept}</span></td>
+      <td class="num grp-pto">${D(r.ptoTaken)}</td>
+      <td class="num">${D(r.ptoFuture)}</td>
+      <td class="num ${low?'flag':''}">${D(r.ptoBal)}${low?' ⚠':''}</td>
+      <td class="bar-cell"><div class="mini"><div class="t" style="width:${tp}%"></div><div class="f" style="width:${fp}%"></div></div></td>
+      <td class="num grp-bon">${D(r.bonusTaken)}</td>
+      <td class="num ${bb?'goldtxt':''}">${D(r.bonusBal)}</td>
+      <td class="num">${D(r.sickTaken)}</td>
+    </tr>`;}).join('');
+  const sum=k=>rows.reduce((s,x)=>s+x[k],0);
+  document.getElementById('tfoot').innerHTML=
+    `<td>Total · ${rows.length}</td><td></td><td class="num">${D(sum('ptoTaken'))}</td><td class="num">${D(sum('ptoFuture'))}</td><td class="num">${D(sum('ptoBal'))}</td><td></td><td class="num">${D(sum('bonusTaken'))}</td><td class="num">${D(sum('bonusBal'))}</td><td class="num">${D(sum('sickTaken'))}</td>`;
+}
+
+fun
