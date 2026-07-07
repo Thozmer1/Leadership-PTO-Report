@@ -171,6 +171,46 @@ let metric = 'pto';
 let sortState = {k:'total', dir:-1};
 let chart;
 
+/* Inline Chart.js plugin: draw value on each bar segment + bold total at bar end */
+var valueLabels = {
+  id:'valueLabels',
+  afterDatasetsDraw:function(chart){
+    var ctx=chart.ctx;
+    ctx.save();
+    ctx.textBaseline='middle';
+    var dsets=chart.data.datasets;
+    dsets.forEach(function(ds,di){
+      var meta=chart.getDatasetMeta(di);
+      meta.data.forEach(function(bar,i){
+        var v=ds.data[i];
+        if(!v||v<=0) return;
+        var w=Math.abs(bar.x-bar.base);
+        if(w<18) return;
+        ctx.font='600 10px Segoe UI, sans-serif';
+        ctx.textAlign='center';
+        var darkSeg = (metric==='pto' && di===1) || (metric==='bonus' && di===0);
+        ctx.fillStyle = darkSeg ? '#ffffff' : '#2b2d2d';
+        ctx.fillText(D(v),(bar.x+bar.base)/2,bar.y);
+      });
+    });
+    var n=chart.data.labels.length;
+    for(var i=0;i<n;i++){
+      var total=0,maxX=0,y=0;
+      dsets.forEach(function(ds,di){
+        total+=ds.data[i]||0;
+        var b=chart.getDatasetMeta(di).data[i];
+        if(b){maxX=Math.max(maxX,b.x);y=b.y;}
+      });
+      if(total<=0) continue;
+      ctx.font='700 10px Segoe UI, sans-serif';
+      ctx.textAlign='left';
+      ctx.fillStyle='#2b2d2d';
+      ctx.fillText(D(total),maxX+6,y);
+    }
+    ctx.restore();
+  }
+};
+
 /* ---------- Refresh parsing logic (mirrors source build) ---------- */
 const INTERNAL = {
   'RECRUI-Recruiters':'Recruiting',
@@ -305,7 +345,9 @@ function renderChart(rows){
   var cfg={type:'bar',data:{labels:labels,datasets:datasets},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       scales:{x:{stacked:true,title:{display:true,text:'Days'}},y:{stacked:true,ticks:{font:{size:11}}}},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+D(c.raw)+' d';}}}}}};
+      layout:{padding:{right:34}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+D(c.raw)+' d';}}}}},
+    plugins:[valueLabels]};
   if(chart){chart.data=cfg.data;chart.options=cfg.options;chart.update();}
   else chart=new Chart(document.getElementById('chart'),cfg);
 }
