@@ -56,6 +56,7 @@
   .goldtxt{color:var(--gold);font-weight:700}
   .grp-pto{border-left:3px solid var(--green-d)}
   .grp-bon{border-left:3px solid var(--gold)}
+  .grp-away{border-left:3px solid var(--gray)}
   .bar-cell{min-width:110px}
   .mini{height:8px;border-radius:4px;background:var(--gray-l);overflow:hidden;display:flex}
   .mini .t{background:var(--green)}
@@ -101,6 +102,7 @@
       <div class="toggle">
         <span class="chip on" id="mPto" onclick="setMetric('pto')">PTO</span>
         <span class="chip" id="mBon" onclick="setMetric('bonus')">Earned Bonus Days</span>
+        <span class="chip" id="mAway" onclick="setMetric('away')">Total Days Away</span>
       </div>
     </div>
     <div class="controls">
@@ -132,13 +134,14 @@
           <th class="bar-cell">Taken vs Future</th>
           <th data-k="bonusTaken" class="num grp-bon">Bonus Taken</th>
           <th data-k="bonusBal" class="num">Bonus Remaining</th>
-          <th data-k="sickTaken" class="num">Sick (Int.)</th>
+          <th data-k="sickTaken" class="num">Sick Taken</th>
+          <th data-k="awayTaken" class="num grp-away">Total Days Away</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
         <tfoot><tr id="tfoot" style="font-weight:700;background:var(--gray-l)"></tr></tfoot>
       </table>
     </div>
-    <p class="ph-sub" style="margin-top:12px">All figures in days (8 hrs = 1 day). Includes Approved &amp; Pending requests for internal departments only (Recruiting, Account Mgmt, Operations, Finance, TA Partner). Client-site consultants excluded. Earned bonus days accrue quarterly.</p>
+    <p class="ph-sub" style="margin-top:12px">All figures in days (8 hrs = 1 day). Includes Approved &amp; Pending requests for internal departments only (Recruiting, Account Mgmt, Operations, Finance, TA Partner). Client-site consultants excluded. Earned bonus days accrue quarterly. <b>Total Days Away</b> = PTO + earned bonus + internal sick days taken (future-dated requests excluded).</p>
   </div>
 
   <div class="foot" id="foot"></div>
@@ -188,7 +191,7 @@ var valueLabels = {
         if(w<18) return;
         ctx.font='600 10px Segoe UI, sans-serif';
         ctx.textAlign='center';
-        var darkSeg = (metric==='pto' && di===1) || (metric==='bonus' && di===0);
+        var darkSeg = (metric==='pto' && di===1) || (metric==='bonus' && di===0) || (metric==='away' && di===2);
         ctx.fillStyle = darkSeg ? '#ffffff' : '#2b2d2d';
         ctx.fillText(D(v),(bar.x+bar.base)/2,bar.y);
       });
@@ -276,9 +279,9 @@ function buildFromWorkbook(wb){
 function D(n){return (Math.round(n*10)/10).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:1});}
 function fmtDate(s){var d=new Date(s+'T00:00');return d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});}
 function fieldFor(k){
-  if(k==='taken') return metric==='pto'?'ptoTaken':'bonusTaken';
-  if(k==='future') return metric==='pto'?'ptoFuture':'bonusBal';
-  if(k==='bal') return metric==='pto'?'ptoBal':'bonusBal';
+  if(k==='taken') return metric==='pto'?'ptoTaken':(metric==='away'?'awayTaken':'bonusTaken');
+  if(k==='future') return metric==='pto'?'ptoFuture':(metric==='away'?'awayFuture':'bonusBal');
+  if(k==='bal') return metric==='bonus'?'bonusBal':'ptoBal';
   return k;
 }
 function currentRows(){
@@ -290,6 +293,7 @@ function currentRows(){
     var av,bv;
     if(k==='total'){
       if(metric==='pto'){av=a.ptoTaken+a.ptoFuture;bv=b.ptoTaken+b.ptoFuture;}
+      else if(metric==='away'){av=a.awayTaken;bv=b.awayTaken;}
       else{av=a.bonusTaken+a.bonusBal;bv=b.bonusTaken+b.bonusBal;}
     }
     else if(k==='name'||k==='dept'){return dir*String(a[k]).localeCompare(String(b[k]));}
@@ -308,6 +312,8 @@ function renderKpis(){
     '<div class="kpi alt"><div class="lab">Future PTO Requested</div><div class="val">'+D(sum('ptoFuture'))+' <span class="unit">days</span></div></div>'+
     '<div class="kpi"><div class="lab">PTO Balance</div><div class="val">'+D(sum('ptoBal'))+' <span class="unit">days</span></div></div>'+
     '<div class="kpi gold"><div class="lab">Bonus Days Taken</div><div class="val">'+D(sum('bonusTaken'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi alt"><div class="lab">Sick Days Taken (YTD)</div><div class="val">'+D(sum('sickTaken'))+' <span class="unit">days</span></div></div>'+
+    '<div class="kpi"><div class="lab">Total Days Away (YTD)</div><div class="val">'+D(sum('awayTaken'))+' <span class="unit">days</span></div><div class="lab" style="margin-top:4px;text-transform:none;letter-spacing:0">PTO + bonus + sick, taken</div></div>'+
     '<div class="kpi gold"><div class="lab">Bonus Days Remaining</div><div class="val">'+D(sum('bonusBal'))+' <span class="unit">days</span></div><div class="lab" style="margin-top:4px;text-transform:none;letter-spacing:0">'+earners+' earning</div></div>';
 }
 function renderChips(){
@@ -319,6 +325,7 @@ function setMetric(m){
   metric=m;
   document.getElementById('mPto').className='chip'+(m==='pto'?' on':'');
   document.getElementById('mBon').className='chip'+(m==='bonus'?' on gold':'');
+  document.getElementById('mAway').className='chip'+(m==='away'?' on':'');
   render();
 }
 function renderChart(rows){
@@ -335,6 +342,12 @@ function renderChart(rows){
       {label:'Taken (YTD)',data:rows.map(function(r){return r.ptoTaken;}),backgroundColor:'#B0DD66'},
       {label:'Future requested',data:rows.map(function(r){return r.ptoFuture;}),backgroundColor:'#747777'}];
     leg='<span><i class="sw" style="background:var(--green)"></i> Taken (YTD)</span><span><i class="sw" style="background:var(--gray)"></i> Future requested</span>';
+  }else if(metric==='away'){
+    datasets=[
+      {label:'PTO taken',data:rows.map(function(r){return r.ptoTaken;}),backgroundColor:'#B0DD66'},
+      {label:'Bonus taken',data:rows.map(function(r){return r.bonusTaken;}),backgroundColor:'#d9a441'},
+      {label:'Sick taken',data:rows.map(function(r){return r.sickTaken;}),backgroundColor:'#747777'}];
+    leg='<span><i class="sw" style="background:var(--green)"></i> PTO taken</span><span><i class="sw" style="background:var(--gold)"></i> Bonus taken</span><span><i class="sw" style="background:var(--gray)"></i> Sick taken</span>';
   }else{
     datasets=[
       {label:'Bonus taken',data:rows.map(function(r){return r.bonusTaken;}),backgroundColor:'#d9a441'},
@@ -367,12 +380,17 @@ function renderTable(rows){
       '<td class="num grp-bon">'+D(r.bonusTaken)+'</td>'+
       '<td class="num '+(bb?'goldtxt':'')+'">'+D(r.bonusBal)+'</td>'+
       '<td class="num">'+D(r.sickTaken)+'</td>'+
+      '<td class="num grp-away" style="font-weight:700">'+D(r.awayTaken)+'</td>'+
     '</tr>';}).join('');
   function sum(k){return rows.reduce(function(s,x){return s+x[k];},0);}
   document.getElementById('tfoot').innerHTML=
-    '<td>Total · '+rows.length+'</td><td></td><td class="num">'+D(sum('ptoTaken'))+'</td><td class="num">'+D(sum('ptoFuture'))+'</td><td class="num">'+D(sum('ptoBal'))+'</td><td></td><td class="num">'+D(sum('bonusTaken'))+'</td><td class="num">'+D(sum('bonusBal'))+'</td><td class="num">'+D(sum('sickTaken'))+'</td>';
+    '<td>Total · '+rows.length+'</td><td></td><td class="num">'+D(sum('ptoTaken'))+'</td><td class="num">'+D(sum('ptoFuture'))+'</td><td class="num">'+D(sum('ptoBal'))+'</td><td></td><td class="num">'+D(sum('bonusTaken'))+'</td><td class="num">'+D(sum('bonusBal'))+'</td><td class="num">'+D(sum('sickTaken'))+'</td><td class="num">'+D(sum('awayTaken'))+'</td>';
 }
+function augment(){DATA.people.forEach(function(p){
+  p.awayTaken=Math.round((p.ptoTaken+p.bonusTaken+p.sickTaken)*100)/100;
+  p.awayFuture=Math.round((p.ptoFuture+p.bonusFuture+p.sickFuture)*100)/100;});}
 function render(){
+  augment();
   sortState.k=document.getElementById('sortBy').value;
   var rows=currentRows();
   renderKpis(); renderChips(); renderTable(rows);
@@ -380,10 +398,12 @@ function render(){
   document.getElementById('foot').textContent='Innovien Solutions · Internal PTO Dashboard · Generated '+fmtDate(DATA.generated)+' · Confidential — leadership use';
   document.getElementById('chartTitle').textContent = metric==='pto'
     ? 'PTO by Person — Taken vs. Future Requested'
-    : 'Earned Bonus Days by Person — Taken vs. Remaining';
+    : (metric==='away' ? 'Total Days Away by Person — PTO + Bonus + Sick (Taken YTD)'
+    : 'Earned Bonus Days by Person — Taken vs. Remaining');
   document.getElementById('chartSub').textContent = metric==='pto'
     ? 'Days off. Sorted by total. Filter by department or search a name.'
-    : 'Quarterly incentive days. Green bars = still available to use.';
+    : (metric==='away' ? 'Every day taken, any policy. Future-dated requests are not included. Filter by department or search a name.'
+    : 'Quarterly incentive days. Green bars = still available to use.');
   try{ renderChart(rows); }catch(e){ document.querySelector('.chartwrap').innerHTML='<div style="color:var(--gray);font-size:13px;padding:20px 0">Chart could not render — the table below has all the data.</div>'; }
 }
 
@@ -429,8 +449,8 @@ drop.addEventListener('drop',function(e){if(e.dataTransfer.files[0])handleFile(e
 /* ---------- CSV export ---------- */
 function exportCsv(){
   var rows=currentRows();
-  var head=['Employee','Department','PTO Taken (days)','Future PTO (days)','PTO Balance (days)','Bonus Taken (days)','Bonus Remaining (days)','Sick Internal (days)'];
-  var lines=[head.join(',')].concat(rows.map(function(r){return [r.name,r.dept,r.ptoTaken,r.ptoFuture,r.ptoBal,r.bonusTaken,r.bonusBal,r.sickTaken].join(',');}));
+  var head=['Employee','Department','PTO Taken (days)','Future PTO (days)','PTO Balance (days)','Bonus Taken (days)','Bonus Remaining (days)','Sick Internal (days)','Total Days Away (days)'];
+  var lines=[head.join(',')].concat(rows.map(function(r){return [r.name,r.dept,r.ptoTaken,r.ptoFuture,r.ptoBal,r.bonusTaken,r.bonusBal,r.sickTaken,r.awayTaken].join(',');}));
   var blob=new Blob([lines.join('\n')],{type:'text/csv'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Innovien_PTO_'+DATA.reportDate+'.csv';a.click();
 }
